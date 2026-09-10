@@ -311,14 +311,16 @@
   window.addEventListener("blur", function(){ ptr.inside = false; });
 
   // ---- Ball & kick state machine ----------------------------------
-  var ball = { state:"held", x:0, y:0, ang:0, timer:0, dur:0.5, arcH:120,
+  var WINDUP = 0.42;                     // seconds the fly-half plants and aims
+  var ball = { state:"held", x:0, y:0, ang:0, timer:0, dur:0.9,
+               g:0, vx:0, vy:0, px:0, py:0,
                from:{ x:0, y:0 }, to:{ x:0, y:0 }, btn:null };
   var particles = [];
   var shake = 0;
 
   function handPos(){
     var reach = 22;
-    if (ball.state === "windup") reach -= 8 * Math.min(1, ball.timer / 0.22);
+    if (ball.state === "windup") reach -= 8 * Math.min(1, ball.timer / WINDUP);
     return { x:fly.x + Math.cos(fly.twist) * reach, y:fly.y + Math.sin(fly.twist) * reach };
   }
 
@@ -334,10 +336,25 @@
 
   function beginFlight(){
     ball.from = handPos();
-    var dx = ball.to.x - ball.from.x, dy = ball.to.y - ball.from.y;
+    var dx = ball.to.x - ball.from.x;
+    var dy = ball.to.y - ball.from.y;              // negative: the button is above the boot
     var dist = Math.hypot(dx, dy);
-    ball.dur = Math.max(0.32, Math.min(0.9, dist / 1150)) * (reduced ? 0.7 : 1);
-    ball.arcH = Math.min(250, 46 + dist * 0.2) * (reduced ? 0.4 : 1);
+
+    // Slower flight: distance-scaled, but roughly 2x the old timing.
+    ball.dur = Math.max(0.9, Math.min(2.0, dist / 520)) * (reduced ? 0.75 : 1);
+
+    // True ballistic launch that lands exactly on the clicked button.
+    // Pick an apex a little above the target, then solve gravity for it so
+    // the launch VECTOR (hence the visible kick angle) is set by where the
+    // button actually is.
+    var apex = Math.max(70, -dy + 18);            // apex height above the launch point
+    var span = Math.max(0, 2 * apex + 2 * dy);    // >= 0 since apex >= -dy
+    var root = (Math.sqrt(2 * apex) + Math.sqrt(span)) / ball.dur;
+    ball.g  = root * root;
+    ball.vx = dx / ball.dur;
+    ball.vy = -Math.sqrt(2 * ball.g * apex);
+    ball.px = ball.from.x;
+    ball.py = ball.from.y;
     ball.state = "flight";
     ball.timer = 0;
   }
@@ -380,11 +397,18 @@
 
   // ---- Update -----------------------------------------------------
   function update(dt, now){
-    // fly-half twist: follow the cursor, or lock onto the target mid-kick
+    // fly-half twist: track the cursor, except while planting/striking, when
+    // he turns to aim along the actual shot so the boot points at the button.
     var follow = Math.atan2(ptr.wy - fly.y, ptr.wx - fly.x);
-    var lock   = Math.atan2(ball.to.y - fly.y, ball.to.x - fly.x);
-    var want   = (ball.state === "held" || ball.state === "return") ? follow : lock;
-    fly.twist = angLerp(fly.twist, want, ball.state === "windup" ? 0.34 : 0.16);
+    var aiming = ball.state === "windup" || (ball.state === "flight" && ball.timer < 0.2);
+    var want = follow, k = 0.16;
+    if (aiming){
+      var ax = ball.to.x - fly.x, ay = ball.to.y - fly.y;      // chord while winding up
+      if (ball.state === "flight"){ ax = ball.vx; ay = ball.vy; } // true launch vector once struck
+      want = Math.atan2(ay, ax);
+      k = 0.3;
+    }
+    fly.twist = angLerp(fly.twist, want, k);
 
     // crowd: cursor disturbance + idle sway + scrum heave
     var heave = Math.sin(now * 0.002) * 1.6;
@@ -424,17 +448,18 @@
       var hw = handPos();
       ball.x = hw.x; ball.y = hw.y;
       ball.ang = fly.twist;
-      if (ball.timer >= 0.22) beginFlight();
+      if (ball.timer >= WINDUP) beginFlight();
     } else if (ball.state === "flight"){
-      var t = ball.timer / ball.dur;
-      if (t >= 1){ impact(); }
-      else {
-        ball.x = ball.from.x + (ball.to.x - ball.from.x) * t;
-        ball.y = ball.from.y + (ball.to.y - ball.from.y) * t - Math.sin(Math.PI * t) * ball.arcH;
-        ball.ang += dt * 20;
-      }
+      // integrate the ballistic trajectory; it is solved to arrive at ball.to
+      ball.vy += ball.g * dt;
+      ball.px += ball.vx * dt;
+      ball.py += ball.vy * dt;
+      ball.x = ball.px;
+      ball.y = ball.py;
+      ball.ang += dt * (7 + Math.abs(ball.vx) * 0.012);
+      if (ball.timer >= ball.dur){ impact(); }
     } else if (ball.state === "impact"){
-      if (ball.timer >= 0.42){ ball.from = { x:ball.x, y:ball.y }; ball.state = "return"; ball.timer = 0; ball.dur = 0.4; }
+      if (ball.timer >= 0.5){ ball.from = { x:ball.x, y:ball.y }; ball.state = "return"; ball.timer = 0; ball.dur = 0.6; }
     } else if (ball.state === "return"){
       var tr = Math.min(1, ball.timer / ball.dur);
       var e = tr * tr * (3 - 2 * tr);
@@ -546,11 +571,15 @@
     ctx.ellipse(2, 7, 13, 8, 0, 0, 6.283);
     ctx.fill();
     ctx.rotate(fly.twist);
-    // kicking leg / follow-through
+    // kicking leg: slow backswing through the wind-up, then a snap that
+    // holds extended as the follow-through while the ball is in the air
     if (kicking){
-      var ext = ball.state === "windup"
-        ? -6 * Math.min(1, ball.timer / 0.22)
-        : 14 * Math.sin(Math.min(1, ball.timer / 0.14) * Math.PI);
+      var ext;
+      if (ball.state === "windup"){
+        ext = -10 * Math.min(1, ball.timer / WINDUP);
+      } else {
+        ext = 18 * Math.sin(Math.min(1, ball.timer / 0.22) * Math.PI * 0.5);
+      }
       px(6, 5, 12 + ext, 5, C.skin);
       px(16 + ext, 4, 6, 7, C.ink);      // boot
     }
