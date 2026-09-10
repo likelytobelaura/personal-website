@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fly-Half's Boot</title>
+<meta name="description" content="An 8-bit rugby landing page: blue's ball, left-side scrum, and a fly-half who watches your cursor and kicks at the nav.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+  /* One committed visual world: a neon arcade CRT. Single theme by design,
+     but every colour and the page ground are painted explicitly so the page
+     holds on any host background. */
+  :root{
+    --pitch:#1f7a3d;
+    --pitch-stripe:#2b8f49;
+    --blue:#2b5cff;
+    --blue-dk:#1332a8;
+    --red:#e23b2e;
+    --red-dk:#8f1b16;
+    --bone:#f4ede2;
+    --ink:#0b0f14;
+    --ink-soft:rgba(11,15,20,0.82);
+    --gold:#ffcf3f;
+    --skin:#e8b58a;
+    --hair:#3a2a1c;
+    --font-arcade:"Press Start 2P","Courier New",monospace;
+    --font-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    overflow:hidden;
+    background:var(--ink);
+    color:var(--bone);
+    font-family:var(--font-mono);
+    -webkit-font-smoothing:none;
+  }
+
+  #pitch{
+    position:fixed;
+    inset:0;
+    width:100vw;
+    height:100vh;
+    display:block;
+    background:var(--pitch);
+    image-rendering:pixelated;
+    z-index:0;
+    touch-action:none;
+  }
+
+  /* ---- Home bar ---------------------------------------------------------- */
+  .bar{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    z-index:10;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px 18px;
+    padding:12px clamp(14px,3vw,26px);
+    background:var(--ink-soft);
+    border-bottom:3px solid var(--gold);
+    backdrop-filter:blur(2px);
+  }
+  .brand{
+    font-family:var(--font-arcade);
+    font-size:clamp(9px,2.2vw,13px);
+    letter-spacing:1px;
+    color:var(--bone);
+    text-shadow:2px 2px 0 var(--blue-dk);
+  }
+  .nav{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .lnk{
+    font-family:var(--font-arcade);
+    font-size:clamp(7px,1.7vw,10px);
+    letter-spacing:1px;
+    color:var(--bone);
+    background:transparent;
+    border:2px solid var(--bone);
+    padding:9px 11px;
+    cursor:pointer;
+    transition:transform .08s steps(2),background .1s,color .1s,border-color .1s;
+  }
+  .lnk:hover,
+  .lnk:focus-visible{
+    color:var(--ink);
+    background:var(--gold);
+    border-color:var(--gold);
+    transform:translate(-1px,-2px);
+    outline:none;
+  }
+  .lnk:focus-visible{
+    box-shadow:0 0 0 3px var(--ink),0 0 0 5px var(--gold);
+  }
+  @keyframes hit{
+    0%{transform:translate(0,0);}
+    25%{transform:translate(-3px,2px);}
+    50%{transform:translate(3px,-2px);}
+    75%{transform:translate(-2px,1px);}
+    100%{transform:translate(0,0);}
+  }
+  .lnk.hit{
+    background:var(--gold);
+    color:var(--ink);
+    border-color:var(--gold);
+    animation:hit .4s steps(2) 1;
+  }
+
+  /* ---- Ground captions ------------------------------------------------- */
+  .caption,
+  .tag{
+    position:fixed;
+    bottom:14px;
+    z-index:5;
+    font-size:11px;
+    line-height:1.5;
+    color:var(--bone);
+    text-shadow:1px 1px 0 rgba(3,8,5,0.85);
+    pointer-events:none;
+  }
+  .caption{
+    left:16px;
+    max-width:min(62vw,340px);
+  }
+  .caption b{color:var(--gold);font-weight:600;}
+  .tag{
+    right:16px;
+    text-align:right;
+    color:rgba(244,237,226,0.7);
+    font-size:10px;
+    letter-spacing:0.5px;
+  }
+
+  /* ---- Kick toast ---------------------------------------------------- */
+  .toast{
+    position:fixed;
+    z-index:15;
+    transform:translate(-50%,0);
+    font-family:var(--font-mono);
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:0.5px;
+    color:var(--ink);
+    background:var(--gold);
+    border:2px solid var(--ink);
+    padding:5px 8px;
+    white-space:nowrap;
+    opacity:0;
+    transition:opacity .12s;
+  }
+  .toast.show{opacity:1;}
+
+  /* ---- CRT overlay -------------------------------------------------- */
+  .crt{
+    position:fixed;
+    inset:0;
+    z-index:20;
+    pointer-events:none;
+    mix-blend-mode:multiply;
+    background:
+      repeating-linear-gradient(0deg,rgba(0,0,0,0.16) 0 1px,rgba(0,0,0,0) 1px 3px),
+      radial-gradient(130% 120% at 50% 42%,rgba(0,0,0,0) 52%,rgba(0,0,0,0.6) 100%);
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .crt{background:radial-gradient(130% 120% at 50% 42%,rgba(0,0,0,0) 55%,rgba(0,0,0,0.5) 100%);}
+    .lnk{transition:none;}
+    .lnk.hit{animation:none;}
+  }
+
+  @media (max-width:520px){
+    .brand{width:100%;}
+    .caption{max-width:min(88vw,340px);}
+  }
+</style>
+</head>
+<body>
+  <canvas id="pitch" aria-label="8-bit rugby scene: blue attacks up the pitch from a left-side scrum, the fly-half tracks your cursor"></canvas>
+
+  <header class="bar">
+    <span class="brand">LAURA&nbsp;BOCEK</span>
+    <nav class="nav" aria-label="Primary">
+      <button type="button" class="lnk" data-label="HOME">HOME</button>
+      <button type="button" class="lnk" data-label="LINKEDIN">LINKEDIN</button>
+      <button type="button" class="lnk" data-label="GITHUB">GITHUB</button>
+      <button type="button" class="lnk" data-label="SUBSTACK">SUBSTACK</button>
+    </nav>
+  </header>
+
+  <p class="caption">
+    Blue's ball, left-side scrum. The <b>fly-half (10)</b> has it and is watching your cursor.
+    Click a link &mdash; he'll put boot to ball.
+  </p>
+  <p class="tag">8-BIT RUGBY &middot; BLUE BALL &middot; v0.1</p>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="crt" aria-hidden="true"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var W = 1280, H = 720;                 // virtual pitch, "cover"-fitted to the window
+  var canvas = document.getElementById("pitch");
+  var ctx = canvas.getContext("2d");
+  var toastEl = document.getElementById("toast");
+  var reduced = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+  var dpr = 1, scale = 1, offX = 0, offY = 0;
+  function layout(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var vw = window.innerWidth, vh = window.innerHeight;
+    canvas.width = Math.round(vw * dpr);
+    canvas.height = Math.round(vh * dpr);
+    scale = Math.max(vw / W, vh / H);     // cover: no letterbox bars
+    offX = (vw - W * scale) / 2;
+    offY = (vh - H * scale) / 2;
+  }
+  function toWorld(cx, cy){ return { x:(cx - offX) / scale, y:(cy - offY) / scale }; }
+  window.addEventListener("resize", layout);
+  layout();
+
+  // ---- Colours (read from CSS so there is one source of truth) ----------
+  var css = getComputedStyle(document.documentElement);
+  var C = {
+    pitch:      css.getPropertyValue("--pitch").trim(),
+    stripe:     css.getPropertyValue("--pitch-stripe").trim(),
+    blue:       css.getPropertyValue("--blue").trim(),
+    blueDk:     css.getPropertyValue("--blue-dk").trim(),
+    red:        css.getPropertyValue("--red").trim(),
+    redDk:      css.getPropertyValue("--red-dk").trim(),
+    bone:       css.getPropertyValue("--bone").trim(),
+    ink:        css.getPropertyValue("--ink").trim(),
+    gold:       css.getPropertyValue("--gold").trim(),
+    skin:       css.getPropertyValue("--skin").trim(),
+    hair:       css.getPropertyValue("--hair").trim()
+  };
+
+  // ---- Players ---------------------------------------------------------
+  var TX = 250, TY = 360;                 // scrum tunnel centre
+  var seedN = 1;
+  function mk(x, y, team, bound, num, face){
+    return {
+      bx:x, by:y, x:x, y:y, tx:x, ty:y,
+      team:team, bound:!!bound, num:num || "",
+      face:(face == null ? (team === "blue" ? -Math.PI/2 : Math.PI/2) : face),
+      seed:(seedN++ * 1.7) % 6.283, swayT:Math.random() * 6.283
+    };
+  }
+
+  function buildPack(team, dir){          // dir +1 = blue (lower), -1 = red (upper)
+    var rows = [
+      { off: 34 * dir, xs:[-40, 0, 40] },   // front row, nearest the tunnel
+      { off: 70 * dir, xs:[-20, 20]     },   // second row
+      { off:108 * dir, xs:[-44, 0, 44]  }    // back row
+    ];
+    var out = [];
+    rows.forEach(function(r){
+      r.xs.forEach(function(dx){ out.push(mk(TX + dx, TY + r.off, team, true)); });
+    });
+    return out;                            // 8 forwards
+  }
+
+  var blueScrum = buildPack("blue", 1);
+  var redScrum  = buildPack("red", -1);
+
+  var blueBacks = [
+    mk(322, 410, "blue", false, "9"),
+    mk(438, 452, "blue", false, "10"),    // fly-half, on the ball
+    mk(566, 486, "blue", false, "12"),
+    mk(694, 516, "blue", false, "13"),
+    mk(902, 556, "blue", false, "11"),
+    mk(560, 634, "blue", false, "15")
+  ];
+  var redBacks = [
+    mk(324, 312, "red", false, "9"),
+    mk(452, 276, "red", false, "10"),
+    mk(586, 258, "red", false, "12"),
+    mk(714, 250, "red", false, "13"),
+    mk(904, 238, "red", false, "11"),
+    mk(582, 120, "red", false, "15")
+  ];
+  var fly = blueBacks[1];
+  fly.twist = 0.5;
+
+  var everyone = blueScrum.concat(redScrum, blueBacks, redBacks);
+
+  // ---- Pointer -------------------------------------------------------
+  var ptr = { wx:W * 0.72, wy:H * 0.52, inside:false };
+  function onMove(e){
+    var w = toWorld(e.clientX, e.clientY);
+    ptr.wx = w.x; ptr.wy = w.y; ptr.inside = true;
+  }
+  window.addEventListener("pointermove", onMove, { passive:true });
+  window.addEventListener("pointerdown", onMove, { passive:true });
+  document.addEventListener("mouseleave", function(){ ptr.inside = false; });
+  window.addEventListener("blur", function(){ ptr.inside = false; });
+
+  // ---- Ball & kick state machine ----------------------------------
+  var ball = { state:"held", x:0, y:0, ang:0, timer:0, dur:0.5, arcH:120,
+               from:{ x:0, y:0 }, to:{ x:0, y:0 }, btn:null };
+  var particles = [];
+  var shake = 0;
+
+  function handPos(){
+    var reach = 22;
+    if (ball.state === "windup") reach -= 8 * Math.min(1, ball.timer / 0.22);
+    return { x:fly.x + Math.cos(fly.twist) * reach, y:fly.y + Math.sin(fly.twist) * reach };
+  }
+
+  function kick(btn){
+    if (ball.state !== "held") return;    // one kick at a time
+    var r = btn.getBoundingClientRect();
+    ball.to = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+    ball.from = handPos();
+    ball.btn = btn;
+    ball.state = "windup";
+    ball.timer = 0;
+  }
+
+  function beginFlight(){
+    ball.from = handPos();
+    var dx = ball.to.x - ball.from.x, dy = ball.to.y - ball.from.y;
+    var dist = Math.hypot(dx, dy);
+    ball.dur = Math.max(0.32, Math.min(0.9, dist / 1150)) * (reduced ? 0.7 : 1);
+    ball.arcH = Math.min(250, 46 + dist * 0.2) * (reduced ? 0.4 : 1);
+    ball.state = "flight";
+    ball.timer = 0;
+  }
+
+  function impact(){
+    ball.x = ball.to.x; ball.y = ball.to.y;
+    ball.state = "impact";
+    ball.timer = 0;
+    shake = reduced ? 0 : 9;
+
+    var n = reduced ? 4 : 16;
+    var cols = [C.gold, C.bone, C.blue];
+    for (var i = 0; i < n; i++){
+      var a = Math.random() * 6.283, sp = 90 + Math.random() * 240;
+      particles.push({
+        x:ball.to.x, y:ball.to.y,
+        vx:Math.cos(a) * sp, vy:Math.sin(a) * sp - 60,
+        life:0.4 + Math.random() * 0.35,
+        col:cols[i % cols.length], sz:3 + (i % 3)
+      });
+    }
+
+    if (ball.btn){
+      ball.btn.classList.add("hit");
+      setTimeout(function(b){ return function(){ b.classList.remove("hit"); }; }(ball.btn), 420);
+      var br = ball.btn.getBoundingClientRect();
+      toastEl.textContent = "→ " + ball.btn.dataset.label + "  ·  link coming soon";
+      toastEl.style.left = (br.left + br.width / 2) + "px";
+      toastEl.style.top = (br.bottom + 8) + "px";
+      toastEl.classList.add("show");
+      clearTimeout(toastEl._t);
+      toastEl._t = setTimeout(function(){ toastEl.classList.remove("show"); }, 1500);
+    }
+  }
+
+  function angLerp(a, b, t){
+    var d = ((b - a + Math.PI) % (2 * Math.PI)) - Math.PI;
+    return a + d * t;
+  }
+
+  // ---- Update -----------------------------------------------------
+  function update(dt, now){
+    // fly-half twist: follow the cursor, or lock onto the target mid-kick
+    var follow = Math.atan2(ptr.wy - fly.y, ptr.wx - fly.x);
+    var lock   = Math.atan2(ball.to.y - fly.y, ball.to.x - fly.x);
+    var want   = (ball.state === "held" || ball.state === "return") ? follow : lock;
+    fly.twist = angLerp(fly.twist, want, ball.state === "windup" ? 0.34 : 0.16);
+
+    // crowd: cursor disturbance + idle sway + scrum heave
+    var heave = Math.sin(now * 0.002) * 1.6;
+    for (var i = 0; i < everyone.length; i++){
+      var p = everyone[i];
+      var baseX = p.bx, baseY = p.by;
+      if (p.bound) baseY += (p.team === "blue" ? -heave : heave);
+
+      p.tx = baseX; p.ty = baseY;
+      if (!reduced && ptr.inside){
+        var dx = p.x - ptr.wx, dy = p.y - ptr.wy;
+        var d = Math.hypot(dx, dy) || 1;
+        var R = 160;
+        if (d < R){
+          var f = (1 - d / R) * (p.bound ? 6 : 17);
+          p.tx += dx / d * f;
+          p.ty += dy / d * f;
+        }
+      }
+      if (!reduced){
+        p.swayT += dt;
+        var amp = p.bound ? 0.7 : 1.6;
+        p.tx += Math.sin(p.swayT * 1.7 + p.seed) * amp;
+        p.ty += Math.cos(p.swayT * 1.3 + p.seed) * amp * 0.8;
+      }
+      p.x += (p.tx - p.x) * (reduced ? 1 : 0.18);
+      p.y += (p.ty - p.y) * (reduced ? 1 : 0.18);
+    }
+
+    // ball
+    ball.timer += dt;
+    if (ball.state === "held"){
+      var h = handPos();
+      ball.x = h.x; ball.y = h.y;
+      ball.ang = fly.twist;
+    } else if (ball.state === "windup"){
+      var hw = handPos();
+      ball.x = hw.x; ball.y = hw.y;
+      ball.ang = fly.twist;
+      if (ball.timer >= 0.22) beginFlight();
+    } else if (ball.state === "flight"){
+      var t = ball.timer / ball.dur;
+      if (t >= 1){ impact(); }
+      else {
+        ball.x = ball.from.x + (ball.to.x - ball.from.x) * t;
+        ball.y = ball.from.y + (ball.to.y - ball.from.y) * t - Math.sin(Math.PI * t) * ball.arcH;
+        ball.ang += dt * 20;
+      }
+    } else if (ball.state === "impact"){
+      if (ball.timer >= 0.42){ ball.from = { x:ball.x, y:ball.y }; ball.state = "return"; ball.timer = 0; ball.dur = 0.4; }
+    } else if (ball.state === "return"){
+      var tr = Math.min(1, ball.timer / ball.dur);
+      var e = tr * tr * (3 - 2 * tr);
+      var hp = handPos();
+      ball.x = ball.from.x + (hp.x - ball.from.x) * e;
+      ball.y = ball.from.y + (hp.y - ball.from.y) * e - Math.sin(Math.PI * tr) * 46;
+      ball.ang += dt * 12;
+      if (tr >= 1){ ball.state = "held"; ball.btn = null; }
+    }
+
+    // particles
+    for (var k = particles.length - 1; k >= 0; k--){
+      var pt = particles[k];
+      pt.life -= dt;
+      if (pt.life <= 0){ particles.splice(k, 1); continue; }
+      pt.vy += 900 * dt;
+      pt.x += pt.vx * dt;
+      pt.y += pt.vy * dt;
+    }
+
+    if (shake > 0.3) shake *= 0.86; else shake = 0;
+  }
+
+  // ---- Draw -----------------------------------------------------
+  function px(x, y, w, h, col){
+    ctx.fillStyle = col;
+    ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  }
+
+  function drawPitch(){
+    px(0, 0, W, H, C.pitch);
+    for (var x = 0; x < W; x += 96) px(x, 0, 48, H, C.stripe);  // mowing stripes
+
+    ctx.globalAlpha = 0.92;
+    // touchlines + try lines
+    px(0, 40, W, 5, C.bone);
+    px(0, H - 45, W, 5, C.bone);
+    px(60, 40, 6, H - 85, C.bone);       // near try line
+    px(W - 66, 40, 6, H - 85, C.bone);
+    px(0, 40, 60, H - 85, "rgba(3,8,5,0.16)");        // in-goal shading
+    px(W - 60, 40, 60, H - 85, "rgba(3,8,5,0.16)");
+    // 22m lines
+    px(302, 40, 4, H - 85, C.bone);
+    px(W - 306, 40, 4, H - 85, C.bone);
+    // halfway (dashed)
+    for (var y = 46; y < H - 45; y += 26) px(639, y, 4, 14, C.bone);
+    // 5m / 15m dashed lanes
+    for (var xx = 70; xx < W - 66; xx += 30){
+      px(xx, 92, 12, 3, "rgba(244,237,226,0.7)");
+      px(xx, H - 96, 12, 3, "rgba(244,237,226,0.7)");
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawBody(p, ang){
+    var c = p.team === "blue" ? [C.blue, C.blueDk] : [C.red, C.redDk];
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.fillStyle = "rgba(3,8,5,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(2, 6, 12, 7, 0, 0, 6.283);
+    ctx.fill();
+    ctx.rotate(ang);
+    px(-9, -9, 18, 18, c[0]);            // jersey
+    px(-9, -9, 18, 4, c[1]);             // shoulder shade
+    px(-9, -1, 18, 3, C.bone);           // hoop
+    px(-13, -6, 5, 7, c[1]);             // shoulders
+    px(8, -6, 5, 7, c[1]);
+    px(6, -8, 8, 4, C.skin);             // arms forward
+    px(6, 4, 8, 4, C.skin);
+    px(1, -5, 10, 10, C.skin);           // head
+    px(1, -5, 10, 3, C.hair);
+    ctx.restore();
+    if (p.num){
+      ctx.fillStyle = C.bone;
+      ctx.font = '7px "Press Start 2P", monospace';
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(p.num, Math.round(p.x), Math.round(p.y) + 1);
+    }
+  }
+
+  function drawFly(){
+    var kicking = (ball.state === "windup" || ball.state === "flight");
+    ctx.save();
+    ctx.translate(fly.x, fly.y);
+    ctx.fillStyle = "rgba(3,8,5,0.3)";
+    ctx.beginPath();
+    ctx.ellipse(2, 7, 13, 8, 0, 0, 6.283);
+    ctx.fill();
+    ctx.rotate(fly.twist);
+    // kicking leg / follow-through
+    if (kicking){
+      var ext = ball.state === "windup"
+        ? -6 * Math.min(1, ball.timer / 0.22)
+        : 14 * Math.sin(Math.min(1, ball.timer / 0.14) * Math.PI);
+      px(6, 5, 12 + ext, 5, C.skin);
+      px(16 + ext, 4, 6, 7, C.ink);      // boot
+    }
+    px(-10, -10, 20, 20, C.blue);
+    px(-10, -10, 20, 4, C.blueDk);
+    px(-10, -1, 20, 3, C.bone);
+    px(-14, -7, 5, 8, C.blueDk);
+    px(9, -7, 5, 8, C.blueDk);
+    px(7, -10, 12, 4, C.skin);           // arms reaching to the ball
+    px(7, 6, 12, 4, C.skin);
+    px(2, -6, 11, 12, C.skin);           // head
+    px(2, -6, 11, 4, C.hair);
+    ctx.restore();
+    ctx.fillStyle = C.bone;
+    ctx.font = '8px "Press Start 2P", monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("10", Math.round(fly.x), Math.round(fly.y) + 1);
+  }
+
+  function drawBall(){
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    ctx.rotate(ball.ang);
+    var rows = [[-3, 6], [-6, 12], [-8, 16], [-6, 12], [-3, 6]];  // blocky spheroid
+    for (var i = 0; i < rows.length; i++) px(rows[i][0], -6 + i * 3, rows[i][1], 3, "#7a3d1f");
+    px(-8, -1, 16, 3, "#95552e");        // seam highlight
+    px(-2, -4, 2, 8, C.bone);            // lace
+    px(-5, -1, 10, 2, C.bone);
+    px(3, -4, 2, 2, C.gold);             // glint
+    ctx.restore();
+  }
+
+  function render(){
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    var sx = shake ? (Math.random() * 2 - 1) * shake : 0;
+    var sy = shake ? (Math.random() * 2 - 1) * shake : 0;
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, (offX + sx) * dpr, (offY + sy) * dpr);
+
+    drawPitch();
+
+    // scrums: draw far rows first so the bind reads front-to-back
+    redScrum.forEach(function(p){ drawBody(p, p.face); });
+    blueScrum.forEach(function(p){ drawBody(p, p.face); });
+    // brace line where the packs meet
+    px(TX - 52, TY - 3, 104, 6, "rgba(3,8,5,0.25)");
+
+    redBacks.forEach(function(p){ drawBody(p, p.face); });
+    blueBacks.forEach(function(p){ if (p !== fly) drawBody(p, p.face); });
+
+    drawFly();
+    if (ball.state !== "impact") drawBall();
+
+    for (var i = 0; i < particles.length; i++){
+      var pt = particles[i];
+      ctx.globalAlpha = Math.max(0, Math.min(1, pt.life * 2.4));
+      px(pt.x, pt.y, pt.sz, pt.sz, pt.col);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- Loop -----------------------------------------------------
+  var last = performance.now();
+  function frame(now){
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt, now);
+    render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ---- Wire the nav (no destinations yet -- animation only) -------
+  document.querySelectorAll(".lnk").forEach(function(btn){
+    btn.addEventListener("click", function(){ kick(btn); });
+  });
+})();
+</script>
+</body>
+</html>
