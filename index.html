@@ -62,8 +62,8 @@
     display:flex;
     flex-wrap:wrap;
     align-items:center;
-    justify-content:space-between;
-    gap:10px 18px;
+    justify-content:flex-start;
+    gap:10px clamp(16px,3.5vw,34px);
     padding:12px clamp(14px,3vw,26px);
     background:var(--ink-soft);
     border-bottom:3px solid var(--gold);
@@ -77,9 +77,11 @@
     text-shadow:2px 2px 0 var(--blue-dk);
   }
   .nav{
+    flex:1 1 auto;
     display:flex;
     flex-wrap:wrap;
-    gap:8px;
+    justify-content:space-between;   /* spread the four buttons across the bar */
+    gap:10px clamp(22px,6vw,72px);
   }
   .lnk{
     font-family:var(--font-arcade);
@@ -179,8 +181,11 @@
     .lnk.hit{animation:none;}
   }
 
-  @media (max-width:520px){
+  @media (max-width:700px){
     .brand{width:100%;}
+    .nav{justify-content:flex-start;gap:8px 14px;}
+  }
+  @media (max-width:520px){
     .caption{max-width:min(88vw,340px);}
   }
 </style>
@@ -191,8 +196,8 @@
   <header class="bar">
     <span class="brand">LAURA&nbsp;BOCEK</span>
     <nav class="nav" aria-label="Primary">
-      <button type="button" class="lnk" data-label="HOME">HOME</button>
       <button type="button" class="lnk" data-label="LINKEDIN">LINKEDIN</button>
+      <button type="button" class="lnk" data-label="HOME">HOME</button>
       <button type="button" class="lnk" data-label="GITHUB">GITHUB</button>
       <button type="button" class="lnk" data-label="SUBSTACK">SUBSTACK</button>
     </nav>
@@ -261,15 +266,15 @@
 
   function buildPack(team, dir){          // dir +1 = blue (lower), -1 = red (upper)
     var rows = [
-      { off: 34 * dir, xs:[-40, 0, 40] },   // front row, nearest the tunnel
-      { off: 70 * dir, xs:[-20, 20]     },   // second row
-      { off:108 * dir, xs:[-44, 0, 44]  }    // back row
+      { off: 34 * dir, xs:[-40, 0, 40], ns:["1", "2", "3"] },  // front row: props + hooker
+      { off: 70 * dir, xs:[-20, 20],    ns:["4", "5"]      },  // second row: locks
+      { off:108 * dir, xs:[-44, 0, 44], ns:["6", "8", "7"] }   // back row: flankers + no.8
     ];
     var out = [];
     rows.forEach(function(r){
-      r.xs.forEach(function(dx){ out.push(mk(TX + dx, TY + r.off, team, true)); });
+      r.xs.forEach(function(dx, i){ out.push(mk(TX + dx, TY + r.off, team, true, r.ns[i])); });
     });
-    return out;                            // 8 forwards
+    return out;                            // 8 forwards, numbered 1-8
   }
 
   var blueScrum = buildPack("blue", 1);
