@@ -283,13 +283,16 @@
     mk(902, 556, "blue", false, "11"),
     mk(560, 634, "blue", false, "15")
   ];
+  // Defenders hold a flat line behind the hindmost foot of the red scrum
+  // (red back row sits at TY - 108; its rearmost foot ~24px behind that).
+  var RED_OFFSIDE = TY - 132;
   var redBacks = [
-    mk(324, 312, "red", false, "9"),
-    mk(452, 276, "red", false, "10"),
-    mk(586, 258, "red", false, "12"),
-    mk(714, 250, "red", false, "13"),
-    mk(904, 238, "red", false, "11"),
-    mk(582, 120, "red", false, "15")
+    mk(300, RED_OFFSIDE,        "red", false, "9"),
+    mk(430, RED_OFFSIDE,        "red", false, "10"),
+    mk(560, RED_OFFSIDE,        "red", false, "12"),
+    mk(700, RED_OFFSIDE,        "red", false, "13"),
+    mk(900, RED_OFFSIDE,        "red", false, "11"),
+    mk(560, RED_OFFSIDE - 150,  "red", false, "15")
   ];
   var fly = blueBacks[1];
   fly.twist = 0.5;
@@ -394,9 +397,9 @@
       if (!reduced && ptr.inside){
         var dx = p.x - ptr.wx, dy = p.y - ptr.wy;
         var d = Math.hypot(dx, dy) || 1;
-        var R = 160;
-        if (d < R){
-          var f = (1 - d / R) * (p.bound ? 6 : 17);
+        var RAD = 160;
+        if (d < RAD){
+          var f = (1 - d / RAD) * (p.bound ? 6 : 17);
           p.tx += dx / d * f;
           p.ty += dy / d * f;
         }
@@ -461,28 +464,48 @@
     ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
   }
 
+  // Pitch runs vertically: length is top-to-bottom, red's goal at the top,
+  // blue's at the bottom, blue attacking upward.
+  var L = 44, R = W - 44, T = 74, B = H - 74;   // side touchlines, top/bottom try lines
+  var FADE = "rgba(244,237,226,0.7)";
+
+  function dashRow(y, col){
+    for (var x = L + 8; x < R - 8; x += 28) px(x, y, 14, 3, col);
+  }
+  function dashCol(x){
+    for (var y = T + 8; y < B - 8; y += 28) px(x, y, 3, 14, FADE);
+  }
+
   function drawPitch(){
     px(0, 0, W, H, C.pitch);
-    for (var x = 0; x < W; x += 96) px(x, 0, 48, H, C.stripe);  // mowing stripes
+    for (var y = 0; y < H; y += 96) px(0, y, W, 48, C.stripe);   // mowing bands across the pitch
 
     ctx.globalAlpha = 0.92;
-    // touchlines + try lines
-    px(0, 40, W, 5, C.bone);
-    px(0, H - 45, W, 5, C.bone);
-    px(60, 40, 6, H - 85, C.bone);       // near try line
-    px(W - 66, 40, 6, H - 85, C.bone);
-    px(0, 40, 60, H - 85, "rgba(3,8,5,0.16)");        // in-goal shading
-    px(W - 60, 40, 60, H - 85, "rgba(3,8,5,0.16)");
+    // side touchlines (run the full length of the pitch)
+    px(L, T - 34, 5, (B + 34) - (T - 34), C.bone);
+    px(R, T - 34, 5, (B + 34) - (T - 34), C.bone);
+    // in-goal areas beyond each try line
+    px(L, T - 34, R - L, 34, "rgba(3,8,5,0.16)");
+    px(L, B, R - L, 34, "rgba(3,8,5,0.16)");
+    // try lines
+    px(L, T, R - L, 6, C.bone);
+    px(L, B, R - L, 6, C.bone);
     // 22m lines
-    px(302, 40, 4, H - 85, C.bone);
-    px(W - 306, 40, 4, H - 85, C.bone);
-    // halfway (dashed)
-    for (var y = 46; y < H - 45; y += 26) px(639, y, 4, 14, C.bone);
-    // 5m / 15m dashed lanes
-    for (var xx = 70; xx < W - 66; xx += 30){
-      px(xx, 92, 12, 3, "rgba(244,237,226,0.7)");
-      px(xx, H - 96, 12, 3, "rgba(244,237,226,0.7)");
-    }
+    px(L, 200, R - L, 4, C.bone);
+    px(L, H - 204, R - L, 4, C.bone);
+    // 10m lines (dashed), either side of halfway
+    dashRow(280, C.bone);
+    dashRow(H - 284, C.bone);
+    // halfway line
+    px(L, H / 2 - 2, R - L, 4, C.bone);
+    // 5m / 15m broken lanes in from each touchline
+    dashCol(L + 46);
+    dashCol(L + 146);
+    dashCol(R - 46);
+    dashCol(R - 146);
+    // 5m dashes inside each try line
+    dashRow(T + 42, FADE);
+    dashRow(B - 42, FADE);
     ctx.globalAlpha = 1;
   }
 
