@@ -164,6 +164,34 @@
   }
   .toast.show{opacity:1;}
 
+  /* ---- Referee speech bubble ------------------------------------------ */
+  .ref-bubble{
+    position:fixed;
+    z-index:16;
+    transform:translate(-50%,-100%);
+    max-width:min(78vw,300px);
+    background:var(--ink);
+    color:var(--bone);
+    font-family:var(--font-mono);
+    font-size:11px;
+    line-height:1.5;
+    border:2px solid var(--red);
+    padding:8px 10px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .12s;
+  }
+  .ref-bubble::after{
+    content:"";
+    position:absolute;
+    left:50%;
+    bottom:-8px;
+    transform:translateX(-50%);
+    border:5px solid transparent;
+    border-top-color:var(--red);
+  }
+  .ref-bubble.show{opacity:1;}
+
   /* ---- CRT overlay -------------------------------------------------- */
   .crt{
     position:fixed;
@@ -207,11 +235,12 @@
 
   <p class="caption">
     Blue's ball, left-side scrum. The <b>fly-half (10)</b> has it and is watching your cursor.
-    Click a link &mdash; he'll put boot to ball.
+    Click a link &mdash; she'll put boot to ball. Mind the referee, though.
   </p>
   <p class="tag">8-BIT RUGBY &middot; BLUE BALL &middot; v0.1</p>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="ref-bubble" id="refBubble" role="status" aria-live="polite"></div>
   <div class="crt" aria-hidden="true"></div>
 
 <script>
@@ -222,6 +251,7 @@
   var canvas = document.getElementById("pitch");
   var ctx = canvas.getContext("2d");
   var toastEl = document.getElementById("toast");
+  var bubbleEl = document.getElementById("refBubble");
   var reduced = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
 
   var dpr = 1, scale = 1, offX = 0, offY = 0;
@@ -235,6 +265,7 @@
     offY = (vh - H * scale) / 2;
   }
   function toWorld(cx, cy){ return { x:(cx - offX) / scale, y:(cy - offY) / scale }; }
+  function toScreen(wx, wy){ return { x:wx * scale + offX, y:wy * scale + offY }; }
   window.addEventListener("resize", layout);
   layout();
 
@@ -304,18 +335,30 @@
   var fly = blueBacks[1];
   fly.twist = 0.5;
 
-  var everyone = blueScrum.concat(redScrum, blueBacks, redBacks);
+  // The referee stands off the open side, watching the front rows.
+  var ref = mk(140, TY, "ref", false, "", 0);
+  ref.state = "idle";     // idle -> angry (hopping) -> card (red card flashed) -> idle
+  ref.timer = 0;
+
+  var everyone = blueScrum.concat(redScrum, blueBacks, redBacks, [ref]);
 
   // ---- Pointer -------------------------------------------------------
+  var REF_HIT = 26;    // click radius around the referee, in world units
   var ptr = { wx:W * 0.72, wy:H * 0.52, inside:false };
   function onMove(e){
     var w = toWorld(e.clientX, e.clientY);
     ptr.wx = w.x; ptr.wy = w.y; ptr.inside = true;
+    canvas.style.cursor = Math.hypot(w.x - ref.x, w.y - ref.y) < REF_HIT ? "pointer" : "";
   }
   window.addEventListener("pointermove", onMove, { passive:true });
   window.addEventListener("pointerdown", onMove, { passive:true });
   document.addEventListener("mouseleave", function(){ ptr.inside = false; });
   window.addEventListener("blur", function(){ ptr.inside = false; });
+
+  canvas.addEventListener("click", function(e){
+    var w = toWorld(e.clientX, e.clientY);
+    if (Math.hypot(w.x - ref.x, w.y - ref.y) < REF_HIT) kickAtReferee();
+  });
 
   // ---- Ball & kick state machine ----------------------------------
   var WINDUP = 0.42;                     // seconds the fly-half plants and aims
@@ -331,14 +374,23 @@
     return { x:fly.x + Math.cos(fly.twist) * reach, y:fly.y + Math.sin(fly.twist) * reach };
   }
 
-  function kick(btn){
+  function launchKick(to, btn){
     if (ball.state !== "held") return;    // one kick at a time
-    var r = btn.getBoundingClientRect();
-    ball.to = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+    ball.to = to;
     ball.from = handPos();
-    ball.btn = btn;
+    ball.btn = btn || null;               // null means the target is the referee, not a nav link
     ball.state = "windup";
     ball.timer = 0;
+  }
+
+  function kick(btn){
+    var r = btn.getBoundingClientRect();
+    launchKick(toWorld(r.left + r.width / 2, r.top + r.height / 2), btn);
+  }
+
+  function kickAtReferee(){
+    if (ref.state !== "idle") return;     // he's already busy being cross
+    launchKick({ x:ref.x, y:ref.y }, null);
   }
 
   function beginFlight(){
@@ -394,7 +446,36 @@
       toastEl.classList.add("show");
       clearTimeout(toastEl._t);
       toastEl._t = setTimeout(function(){ toastEl.classList.remove("show"); }, 1500);
+    } else {
+      ref.state = "angry";     // the ball hit the referee, not a link -- he is not pleased
+      ref.timer = 0;
     }
+  }
+
+  var REF_ANGRY_T = 1.0, REF_CARD_T = 1.8;
+  function updateReferee(dt){
+    if (ref.state === "idle") return;
+    ref.timer += dt;
+    if (ref.state === "angry" && ref.timer >= REF_ANGRY_T){
+      ref.state = "card";
+      ref.timer = 0;
+      showRefBubble();
+    } else if (ref.state === "card" && ref.timer >= REF_CARD_T){
+      ref.state = "idle";
+      ref.timer = 0;
+      hideRefBubble();
+    }
+  }
+
+  function showRefBubble(){
+    var s = toScreen(ref.x, ref.y - 30);
+    bubbleEl.style.left = s.x + "px";
+    bubbleEl.style.top = s.y + "px";
+    bubbleEl.textContent = "“In rugby, we respect the Sir! This is not a hooligan’s game!”";
+    bubbleEl.classList.add("show");
+  }
+  function hideRefBubble(){
+    bubbleEl.classList.remove("show");
   }
 
   function angLerp(a, b, t){
@@ -476,6 +557,8 @@
       ball.ang += dt * 12;
       if (tr >= 1){ ball.state = "held"; ball.btn = null; }
     }
+
+    updateReferee(dt);
 
     // particles
     for (var k = particles.length - 1; k >= 0; k--){
@@ -608,6 +691,45 @@
     ctx.fillText("10", Math.round(fly.x), Math.round(fly.y) + 1);
   }
 
+  function drawReferee(){
+    var hop = ref.state === "angry" ? Math.abs(Math.sin(ref.timer * 15)) * 9 : 0;
+    var wob = ref.state === "angry" ? Math.sin(ref.timer * 18) * 0.3 : 0;
+    ctx.save();
+    ctx.translate(ref.x, ref.y);
+    ctx.fillStyle = "rgba(3,8,5,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(2, 6, 11, 7, 0, 0, 6.283);    // shadow stays on the ground through the hop
+    ctx.fill();
+    ctx.translate(0, -hop);
+    ctx.rotate(ref.face + wob);
+    px(-8, -8, 16, 16, C.gold);            // hi-vis jersey -- distinct from both teams
+    px(-8, -8, 16, 4, "#b8890f");          // shoulder shade
+    px(-8, 0, 16, 3, C.ink);               // trim
+    px(-11, -5, 4, 6, "#b8890f");          // shoulders
+    px(7, -5, 4, 6, "#b8890f");
+    px(5, -7, 7, 4, C.skin);               // arm, watching the front rows
+    px(1, -4, 9, 9, C.skin);               // head
+    px(1, -4, 9, 3, C.hair);
+    ctx.restore();
+  }
+
+  function drawRefCard(){
+    if (ref.state !== "card") return;
+    if (Math.floor(ref.timer / 0.14) % 2 !== 0) return;   // blink the card on/off
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = C.red;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ref.x, ref.y - 16);
+    ctx.lineTo(fly.x, fly.y);              // flashed straight at the blue fly-half
+    ctx.stroke();
+    ctx.restore();
+    px(ref.x - 5, ref.y - 30, 10, 14, C.red);
+    px(ref.x - 5, ref.y - 30, 10, 3, "#ff6a5c");
+  }
+
   function drawBall(){
     ctx.save();
     ctx.translate(ball.x, ball.y);
@@ -629,6 +751,8 @@
     ctx.setTransform(scale * dpr, 0, 0, scale * dpr, (offX + sx) * dpr, (offY + sy) * dpr);
 
     drawPitch();
+    drawReferee();
+    drawRefCard();
 
     // scrums: draw far rows first so the bind reads front-to-back
     redScrum.forEach(function(p){ drawBody(p, p.face); });
