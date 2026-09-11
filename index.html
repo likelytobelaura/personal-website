@@ -286,7 +286,6 @@
   <header class="bar">
     <span class="brand">LAURA&nbsp;BOCEK</span>
     <nav class="nav" aria-label="Primary">
-      <button type="button" class="lnk" data-label="HOME">HOME</button>
       <button type="button" class="lnk" data-label="ABOUT ME">ABOUT&nbsp;ME</button>
       <button type="button" class="lnk" data-label="LINKEDIN">LINKEDIN</button>
       <button type="button" class="lnk" data-label="GITHUB">GITHUB</button>
@@ -305,7 +304,7 @@
 
   <div class="about-overlay" id="aboutOverlay" aria-hidden="true">
     <div class="about-card" role="dialog" aria-label="About Laura Bocek">
-      <p class="about-eyebrow">AT THE HALFWAY LINE</p>
+      <p class="about-eyebrow">PLAYER CARD</p>
       <p class="about-body">
         Hi, I am Laura Bocek. I graduated from Stanford in 2025 after studying Computer Science and
         International Relations. I spent the past few years in venture capital, but I am now focused
@@ -422,9 +421,9 @@
 
   var everyone = blueScrum.concat(redScrum, blueBacks, redBacks, [ref]);
 
-  // ---- About: clear the pitch, let the fly-half and her opposite number
-  // meet at halfway, then put the bio up. idle -> exit -> meet -> reveal.
-  var about = { active:false, phase:"idle", timer:0, redMate:redBacks[1], redMateFace0:0 };
+  // ---- About: clear the whole pitch, then put the player card up.
+  // idle -> exit -> reveal.
+  var about = { active:false, phase:"idle", timer:0 };
 
   // ---- Pointer -------------------------------------------------------
   var REF_HIT = 26;    // click radius around the referee, in world units
@@ -577,56 +576,39 @@
     about.active = true;
     about.phase = "exit";
     about.timer = 0;
-    about.redMateFace0 = about.redMate.face;
     ball.state = "held";
     ball.btn = null;
     ref.state = "idle";
     hideRefBubble();
     toastEl.classList.remove("show");
+    fly.twist = -Math.PI / 2;   // face upfield like the rest of blue while she jogs off
   }
 
   function endAbout(){
     about.active = false;
     about.phase = "idle";
     about.timer = 0;
-    about.redMate.face = about.redMateFace0;
     hideBioPanel();
   }
 
   function updateAbout(dt){
     about.timer += dt;
-    var midX = W / 2, midY = TY;
-    var crowdRate = reduced ? 1 : 0.045;      // reduced motion: snap instead of stream
-    var mateRate  = reduced ? 1 : 0.035;
-    var turnRate  = reduced ? 1 : 0.05;
-    var exitT = reduced ? 0.05 : 1.6, meetT = reduced ? 0.05 : 0.6;
+    var midX = W / 2;
+    var rate0 = reduced ? 1 : 0.045;          // reduced motion: snap instead of stream
+    var exitT = reduced ? 0.05 : 1.6;
 
-    // everyone but the two ambassadors streams off toward their own end,
-    // drifting toward the centre so the exit reads as one crowd leaving
+    // everyone streams off toward their own end, drifting toward the
+    // centre a little so the exit reads as one crowd leaving together
     for (var i = 0; i < everyone.length; i++){
       var p = everyone[i];
-      if (p === fly || p === about.redMate) continue;
-      var rate = crowdRate + (reduced ? 0 : (p.seed / 6.283) * 0.035);
+      var rate = rate0 + (reduced ? 0 : (p.seed / 6.283) * 0.035);
       var tx = p.bx + (midX - p.bx) * 0.5;
       var ty = p.team === "red" ? T - 90 : B + 90;
       p.x += (tx - p.x) * rate;
       p.y += (ty - p.y) * rate;
     }
 
-    // the two ambassadors walk in to meet at halfway, turning to face
-    // each other as they close the distance
-    fly.x += (midX - fly.x) * mateRate;
-    fly.y += (midY - fly.y) * mateRate;
-    about.redMate.x += (midX - about.redMate.x) * mateRate;
-    about.redMate.y += (midY - about.redMate.y) * mateRate;
-    var toMate = Math.atan2(about.redMate.y - fly.y, about.redMate.x - fly.x);
-    fly.twist = angLerp(fly.twist, toMate, turnRate);
-    about.redMate.face = angLerp(about.redMate.face, toMate + Math.PI, turnRate);
-
     if (about.phase === "exit" && about.timer >= exitT){
-      about.phase = "meet";
-      about.timer = 0;
-    } else if (about.phase === "meet" && about.timer >= meetT){
       about.phase = "reveal";
       about.timer = 0;
       showBioPanel();
@@ -948,7 +930,6 @@
 
   // ---- Wire the nav ------------------------------------------------
   var LINKS = {
-    "HOME": "./",
     "LINKEDIN": "https://www.linkedin.com/in/laura-bocek/",
     "GITHUB": "https://github.com/likelytobelaura",
     "SUBSTACK": null    // TODO: add the Substack URL once it's ready
