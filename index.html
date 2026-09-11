@@ -504,8 +504,8 @@
   function dashRow(y, col){
     for (var x = L + 8; x < R - 8; x += 28) px(x, y, 14, 3, col);
   }
-  function dashCol(x){
-    for (var y = T + 8; y < B - 8; y += 28) px(x, y, 3, 14, FADE);
+  function dashCol(x, col){
+    for (var y = T + 8; y < B - 8; y += 28) px(x, y, 3, 14, col || FADE);
   }
 
   function drawPitch(){
@@ -530,11 +530,12 @@
     dashRow(H - 284, C.bone);
     // halfway line
     px(L, H / 2 - 2, R - L, 4, C.bone);
-    // 5m / 15m broken lanes in from each touchline
-    dashCol(L + 46);
-    dashCol(L + 146);
-    dashCol(R - 46);
-    dashCol(R - 146);
+    // 5m / 15m broken lanes in from each touchline (pitch is ~70m wide,
+    // so at this scale 5m ~ 85px and 15m ~ 255px in from touch)
+    dashCol(L + 85, FADE);
+    dashCol(L + 255, C.bone);
+    dashCol(R - 85, FADE);
+    dashCol(R - 255, C.bone);
     // 5m dashes inside each try line
     dashRow(T + 42, FADE);
     dashRow(B - 42, FADE);
