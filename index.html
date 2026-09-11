@@ -530,10 +530,10 @@
     dashRow(H - 284, C.bone);
     // halfway line
     px(L, H / 2 - 2, R - L, 4, C.bone);
-    // 5m and 15m lines (both broken) in from each touchline
+    // 5m and 15m lines (both broken, both clearly visible) in from each touchline
     // (pitch is ~70m wide, so at this scale 5m ~ 85px and 15m ~ 255px in from touch)
-    dashCol(L + 85, FADE);
-    dashCol(R - 85, FADE);
+    dashCol(L + 85, C.bone);
+    dashCol(R - 85, C.bone);
     dashCol(L + 255, C.bone);
     dashCol(R - 255, C.bone);
     // 5m dashes inside each try line
