@@ -192,6 +192,65 @@
   }
   .ref-bubble.show{opacity:1;}
 
+  /* ---- About overlay: the pitch clears and the two players' bio goes up */
+  .about-overlay{
+    position:fixed;
+    inset:0;
+    z-index:25;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px 16px;
+    background:rgba(11,15,20,0.76);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .35s;
+  }
+  .about-overlay.show{opacity:1;pointer-events:auto;}
+  .about-card{
+    width:100%;
+    max-width:560px;
+    max-height:82vh;
+    overflow-y:auto;
+    background:var(--ink);
+    border:3px solid var(--gold);
+    padding:22px clamp(18px,4vw,26px) 20px;
+    transform:translateY(12px);
+    transition:transform .35s;
+  }
+  .about-overlay.show .about-card{transform:translateY(0);}
+  .about-eyebrow{
+    margin:0 0 12px;
+    font-family:var(--font-arcade);
+    font-size:10px;
+    letter-spacing:1.5px;
+    color:var(--gold);
+  }
+  .about-body{
+    margin:0 0 20px;
+    font-family:var(--font-mono);
+    font-size:14px;
+    line-height:1.7;
+    color:var(--bone);
+  }
+  .about-body a{color:var(--gold);}
+  .about-close{
+    font-family:var(--font-arcade);
+    font-size:9px;
+    letter-spacing:1px;
+    color:var(--ink);
+    background:var(--gold);
+    border:2px solid var(--gold);
+    padding:10px 12px;
+    cursor:pointer;
+  }
+  .about-close:hover,
+  .about-close:focus-visible{
+    background:var(--bone);
+    border-color:var(--bone);
+    outline:none;
+  }
+
   /* ---- CRT overlay -------------------------------------------------- */
   .crt{
     position:fixed;
@@ -208,6 +267,8 @@
     .crt{background:radial-gradient(130% 120% at 50% 42%,rgba(0,0,0,0) 55%,rgba(0,0,0,0.5) 100%);}
     .lnk{transition:none;}
     .lnk.hit{animation:none;}
+    .about-overlay,
+    .about-card{transition:none;}
   }
 
   @media (max-width:700px){
@@ -241,6 +302,23 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="ref-bubble" id="refBubble" role="status" aria-live="polite"></div>
+
+  <div class="about-overlay" id="aboutOverlay" aria-hidden="true">
+    <div class="about-card" role="dialog" aria-label="About Laura Bocek">
+      <p class="about-eyebrow">AT THE HALFWAY LINE</p>
+      <p class="about-body">
+        Hi, I am Laura Bocek. I graduated from Stanford in 2025 after studying Computer Science and
+        International Relations. I spent the past few years in venture capital, but I am now focused
+        on open model training and collaboration mechanisms for complex projects. I am spending most
+        of my time contributing to the Marin Lab and other open source projects. I love rugby and
+        played professionally in the US, won a few national championships with Stanford Women's
+        Rugby, and played abroad a few times. If anything here is interesting send me an email at
+        <a href="mailto:laurabocek@knrassociates.biz">laurabocek@knrassociates.biz</a>.
+      </p>
+      <button type="button" class="about-close" id="aboutClose">&larr;&nbsp;BACK&nbsp;TO&nbsp;THE&nbsp;PITCH</button>
+    </div>
+  </div>
+
   <div class="crt" aria-hidden="true"></div>
 
 <script>
@@ -252,6 +330,8 @@
   var ctx = canvas.getContext("2d");
   var toastEl = document.getElementById("toast");
   var bubbleEl = document.getElementById("refBubble");
+  var aboutOverlay = document.getElementById("aboutOverlay");
+  var aboutCloseBtn = document.getElementById("aboutClose");
   var reduced = window.matchMedia("(prefers-reduced-motion:reduce)").matches;
 
   var dpr = 1, scale = 1, offX = 0, offY = 0;
@@ -342,6 +422,10 @@
 
   var everyone = blueScrum.concat(redScrum, blueBacks, redBacks, [ref]);
 
+  // ---- About: clear the pitch, let the fly-half and her opposite number
+  // meet at halfway, then put the bio up. idle -> exit -> meet -> reveal.
+  var about = { active:false, phase:"idle", timer:0, redMate:redBacks[1], redMateFace0:0 };
+
   // ---- Pointer -------------------------------------------------------
   var REF_HIT = 26;    // click radius around the referee, in world units
   var ptr = { wx:W * 0.72, wy:H * 0.52, inside:false };
@@ -375,6 +459,7 @@
   }
 
   function launchKick(to, btn){
+    if (about.active) return;             // the pitch is cleared -- no kicking mid-bio
     if (ball.state !== "held") return;    // one kick at a time
     ball.to = to;
     ball.from = handPos();
@@ -439,13 +524,16 @@
     if (ball.btn){
       ball.btn.classList.add("hit");
       setTimeout(function(b){ return function(){ b.classList.remove("hit"); }; }(ball.btn), 420);
+      var label = ball.btn.dataset.label;
+      var dest = LINKS[label];
       var br = ball.btn.getBoundingClientRect();
-      toastEl.textContent = "→ " + ball.btn.dataset.label + "  ·  link coming soon";
+      toastEl.textContent = dest ? "→ " + label : "→ " + label + "  ·  link coming soon";
       toastEl.style.left = (br.left + br.width / 2) + "px";
       toastEl.style.top = (br.bottom + 8) + "px";
       toastEl.classList.add("show");
       clearTimeout(toastEl._t);
       toastEl._t = setTimeout(function(){ toastEl.classList.remove("show"); }, 1500);
+      if (dest) setTimeout(function(){ window.location.href = dest; }, 650);
     } else {
       ref.state = "angry";     // the ball hit the referee, not a link -- he is not pleased
       ref.timer = 0;
@@ -483,8 +571,81 @@
     return a + d * t;
   }
 
+  // ---- About: clear the field, let two players meet, put the bio up ----
+  function startAbout(){
+    if (about.active) return;
+    about.active = true;
+    about.phase = "exit";
+    about.timer = 0;
+    about.redMateFace0 = about.redMate.face;
+    ball.state = "held";
+    ball.btn = null;
+    ref.state = "idle";
+    hideRefBubble();
+    toastEl.classList.remove("show");
+  }
+
+  function endAbout(){
+    about.active = false;
+    about.phase = "idle";
+    about.timer = 0;
+    about.redMate.face = about.redMateFace0;
+    hideBioPanel();
+  }
+
+  function updateAbout(dt){
+    about.timer += dt;
+    var midX = W / 2, midY = TY;
+    var crowdRate = reduced ? 1 : 0.045;      // reduced motion: snap instead of stream
+    var mateRate  = reduced ? 1 : 0.035;
+    var turnRate  = reduced ? 1 : 0.05;
+    var exitT = reduced ? 0.05 : 1.6, meetT = reduced ? 0.05 : 0.6;
+
+    // everyone but the two ambassadors streams off toward their own end,
+    // drifting toward the centre so the exit reads as one crowd leaving
+    for (var i = 0; i < everyone.length; i++){
+      var p = everyone[i];
+      if (p === fly || p === about.redMate) continue;
+      var rate = crowdRate + (reduced ? 0 : (p.seed / 6.283) * 0.035);
+      var tx = p.bx + (midX - p.bx) * 0.5;
+      var ty = p.team === "red" ? T - 90 : B + 90;
+      p.x += (tx - p.x) * rate;
+      p.y += (ty - p.y) * rate;
+    }
+
+    // the two ambassadors walk in to meet at halfway, turning to face
+    // each other as they close the distance
+    fly.x += (midX - fly.x) * mateRate;
+    fly.y += (midY - fly.y) * mateRate;
+    about.redMate.x += (midX - about.redMate.x) * mateRate;
+    about.redMate.y += (midY - about.redMate.y) * mateRate;
+    var toMate = Math.atan2(about.redMate.y - fly.y, about.redMate.x - fly.x);
+    fly.twist = angLerp(fly.twist, toMate, turnRate);
+    about.redMate.face = angLerp(about.redMate.face, toMate + Math.PI, turnRate);
+
+    if (about.phase === "exit" && about.timer >= exitT){
+      about.phase = "meet";
+      about.timer = 0;
+    } else if (about.phase === "meet" && about.timer >= meetT){
+      about.phase = "reveal";
+      about.timer = 0;
+      showBioPanel();
+    }
+  }
+
+  function showBioPanel(){
+    aboutOverlay.classList.add("show");
+    aboutOverlay.setAttribute("aria-hidden", "false");
+  }
+  function hideBioPanel(){
+    aboutOverlay.classList.remove("show");
+    aboutOverlay.setAttribute("aria-hidden", "true");
+  }
+
   // ---- Update -----------------------------------------------------
   function update(dt, now){
+    if (about.active){ updateAbout(dt); return; }
+
     // fly-half twist: track the cursor, except while planting/striking, when
     // he turns to aim along the actual shot so the boot points at the button.
     var follow = Math.atan2(ptr.wy - fly.y, ptr.wx - fly.x);
@@ -764,7 +925,7 @@
     blueBacks.forEach(function(p){ if (p !== fly) drawBody(p, p.face); });
 
     drawFly();
-    if (ball.state !== "impact") drawBall();
+    if (ball.state !== "impact" && !about.active) drawBall();
 
     for (var i = 0; i < particles.length; i++){
       var pt = particles[i];
@@ -785,9 +946,27 @@
   }
   requestAnimationFrame(frame);
 
-  // ---- Wire the nav (no destinations yet -- animation only) -------
+  // ---- Wire the nav ------------------------------------------------
+  var LINKS = {
+    "HOME": "./",
+    "LINKEDIN": "https://www.linkedin.com/in/laura-bocek/",
+    "GITHUB": "https://github.com/likelytobelaura",
+    "SUBSTACK": null    // TODO: add the Substack URL once it's ready
+  };
   document.querySelectorAll(".lnk").forEach(function(btn){
-    btn.addEventListener("click", function(){ kick(btn); });
+    if (btn.dataset.label === "ABOUT ME"){
+      btn.addEventListener("click", startAbout);
+    } else {
+      btn.addEventListener("click", function(){ kick(btn); });
+    }
+  });
+
+  aboutCloseBtn.addEventListener("click", endAbout);
+  aboutOverlay.addEventListener("click", function(e){
+    if (e.target === aboutOverlay) endAbout();
+  });
+  window.addEventListener("keydown", function(e){
+    if (e.key === "Escape" && about.phase === "reveal") endAbout();
   });
 })();
 </script>
